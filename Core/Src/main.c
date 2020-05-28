@@ -51,9 +51,9 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-char statusAndLast10Gestures[11][5] = {0}; // 0 is master_ready, 1-11 is gestures newest->oldest
-char gesture_name[5] = "NON\0";
-uint8_t gesture_data = 0;
+char statusAndLast10Gestures[11][4] = {0}; // 0 is master_ready, 1-11 is gestures newest->oldest
+char gesture_name[4] = "NON\0";
+uint16_t gesture_data = 0;
 volatile uint8_t master_ready = 0;
 volatile uint8_t uart_flag = 0;
 /* USER CODE END PV */
@@ -85,6 +85,10 @@ unsigned char PAJ7620U2_init()
 		 DEV_I2C_WriteByte(Init_Register_Array[i][0], Init_Register_Array[i][1]);//Power up initialize
 	}
 	DEV_I2C_WriteByte(0x65, 0x12);
+	for (i=0; i<Gesture_Array_SIZE; ++i)
+	{
+	  DEV_I2C_WriteByte(Init_Gesture_Array[i][0], Init_Gesture_Array[i][1]);
+	}
 	return 1;
 }
 /* USER CODE END PFP */
@@ -137,25 +141,25 @@ int main(void)
   while (1)
   {
 	  // for testing purposes no IT yet
-	  gesture_data = DEV_I2C_ReadByte(PAJ_INT_FLAG1);
+	  gesture_data = DEV_I2C_ReadWord(PAJ_INT_FLAG1);
 	  if (gesture_data)
 	  {
 	    switch (gesture_data)
 	    {
-	      case PAJ_UP:			  	strcpy(gesture_name, "U\0");	break;
-	  		case PAJ_DOWN:				strcpy(gesture_name, "D\0");	break;
-	  		case PAJ_LEFT:				strcpy(gesture_name, "L\0");	break;
-	  		case PAJ_RIGHT:				strcpy(gesture_name, "R\0"); 	break;
-	  		case PAJ_FORWARD:			strcpy(gesture_name, "FW\0");	break;
-	  		case PAJ_BACKWARD:			strcpy(gesture_name, "BW\0"); 	break;
-	  		case PAJ_CLOCKWISE:			strcpy(gesture_name, "CW\0"); 	break;
-	  		case PAJ_COUNT_CLOCKWISE:	strcpy(gesture_name, "CCW\0"); 	break;
+	      case PAJ_UP:			  	          strcpy(gesture_name, "U\0");	break;
+	  		case PAJ_DOWN:				          strcpy(gesture_name, "D\0");	break;
+	  		case PAJ_LEFT:				          strcpy(gesture_name, "L\0");	break;
+	  		case PAJ_RIGHT:				          strcpy(gesture_name, "R\0"); 	break;
+	  		case PAJ_FORWARD:			          strcpy(gesture_name, "FW\0");	break;
+	  		case PAJ_BACKWARD:			        strcpy(gesture_name, "BW\0"); 	break;
+	  		case PAJ_CLOCKWISE:			        strcpy(gesture_name, "CW\0"); 	break;
+	  		case PAJ_COUNT_CLOCKWISE:	      strcpy(gesture_name, "CCW\0"); 	break;
 	  		default:
 	  			gesture_data=DEV_I2C_ReadByte(PAJ_INT_FLAG2);
-	  			if(gesture_data == PAJ_WAVE) strcpy(gesture_name, "WAV\0");
+	  			if(gesture_data == PAJ_WAVE)  strcpy(gesture_name, "WAV\0");
 	  			break;
 	  	}
-	  	memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], (sizeof(statusAndLast10Gestures)-2*5*sizeof(char))); // last element gets overwritten
+	  	memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], (sizeof(statusAndLast10Gestures)-2*4*sizeof(char))); // last element gets overwritten
 	  	strcpy(statusAndLast10Gestures[1], gesture_name); // save new gesture
 	  	HAL_Delay(50);
 	  	HAL_UART_Transmit(&huart2, (uint8_t*)&gesture_name, sizeof(gesture_name), 0xFFFF);
@@ -375,6 +379,7 @@ static void MX_GPIO_Init(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	HAL_UART_Transmit_DMA(&huart2, (uint8_t*)statusAndLast10Gestures, sizeof(statusAndLast10Gestures));
+	HAL_UART_Receive_IT(&huart2, (uint8_t*)&uart_flag, 1); // wait for input from testing PC
 }
 
 // I2CReadGesture - called by GPIO_PIN_11 EXTI ISR - incoming INT from gesture sensor

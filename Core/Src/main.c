@@ -191,8 +191,8 @@ int main(void)
   while (1)
   {
 	  // for testing purposes no IT yet
-	  I2CReadGesture();
-	  //HAL_SPI_TransmitReceive(&hspi2, 42, &master_ready, 1, 10);
+	  //I2CReadGesture();
+	  //HAL_SPI_TransmitReceive(&hspi2, 42, &master_ready, 1, 10); // debug send 42
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

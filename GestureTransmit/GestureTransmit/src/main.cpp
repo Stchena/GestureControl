@@ -2,15 +2,19 @@
 #include <SPI.h>
 #include <ESP8266WiFi.h>
 
+// change this define to 1 for increased serial monitor cluttering
+#define DEBUG_ON 0
 
 volatile uint8_t master_ready = 1;
 volatile uint8_t gesture_type = 0;
 String gesture_name = "NON";
 
-const char* ssid = "pennyisafreeloader";
-const char* pwd = "BigBangThe0ry";
-const char* server = "migu.ovh";
+const char* ssid = "pennyisafreeloader"; // guest wifi
+const char* pwd = "BigBangThe0ry"; // guest wifi pwd
+const char* server = "migu.ovh"; // vps
 const char* _getLink = "http://migu.ovh";
+
+String prev_gesture = "NON";
 
 WiFiClient client;
 
@@ -34,6 +38,7 @@ void loop() {
   if(master_ready)
     gesture_type = SPI.transfer(master_ready); // this sends data but at the same time receives
   if(gesture_type) {
+    prev_gesture = gesture_name;
     switch (gesture_type)
 		{
 			case 1:			  gesture_name = "UP";	break;
@@ -48,27 +53,28 @@ void loop() {
 				 gesture_name = "UNRECOGNIZED";
 				 break;
     }
+    if(DEBUG_ON) {
+      Serial.println("previous:");
+      Serial.println(prev_gesture);
+      Serial.println("current:");
+      Serial.println(gesture_name);
+    }
   }
   // Post Gesture to server via WiFi
-  //if(client.connect(server, 5000)) {
-  if(client.connect(server, 80)) {
-    Serial.println("Gesture is: ");
-    Serial.println(gesture_name);
-    /*
-    postStr += "&field1=";
-    postStr += gesture_name;
-    postStr += "\r\n\r\n";
-
-    client.print("POST /update HTTP/1.1\n");
-    client.print("Host: api.thingspeak.com\n");
-    client.print("Connection: close\n");
-    client.print("X-THINGSPEAKAPIKEY: "+apiKey+"\n");
-    client.print("Content-Type: application/x-www-form-urlencoded\n");
-    client.print("Content-Length: ");
-    client.print(postStr.length());
-    client.print("\n\n");
-    client.print(postStr);
-    */
+  if(gesture_name != prev_gesture) {
+    if(client.connect(server, 5000)) {
+      Serial.println("Gesture is: ");
+      Serial.println(gesture_name);
+      
+      client.print("POST /update HTTP/1.1\n");
+      client.print("Host: migu.ovh\n");
+      client.print("Connection: close\n");
+      client.print("Content-Length: ");
+      client.print(gesture_name.length());
+      client.print("\n\n");
+      client.print(gesture_name);
+    }
+    else Serial.println("Gesture Unchanged!");
   }
   client.stop();
 }

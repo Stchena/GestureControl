@@ -39,14 +39,14 @@
 #define PAJ7620_VAL(val, maskbit)		( val << maskbit )
 //Gesture detection interrupt flag
 #define PAJ_UP				      PAJ7620_VAL(1,0)
-#define PAJ_DOWN				    PAJ7620_VAL(1,1)
-#define PAJ_LEFT					  PAJ7620_VAL(1,2)
-#define PAJ_RIGHT				    PAJ7620_VAL(1,3)
+#define PAJ_DOWN				  PAJ7620_VAL(1,1)
+#define PAJ_LEFT				  PAJ7620_VAL(1,2)
+#define PAJ_RIGHT				  PAJ7620_VAL(1,3)
 #define PAJ_FORWARD				  PAJ7620_VAL(1,4)
 #define PAJ_BACKWARD			  PAJ7620_VAL(1,5)
 #define PAJ_CLOCKWISE			  PAJ7620_VAL(1,6)
-#define PAJ_COUNT_CLOCKWISE PAJ7620_VAL(1,7)
-#define PAJ_WAVE 				    PAJ7620_VAL(1,0)
+#define PAJ_COUNT_CLOCKWISE 	  PAJ7620_VAL(1,7)
+#define PAJ_WAVE 				  PAJ7620_VAL(1,0)
 //Initialize array size
 #define Init_Array sizeof(Init_Register_Array)/2
 #define PS_Array_SIZE sizeof(Init_PS_Array)/2

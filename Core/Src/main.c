@@ -24,8 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
-#include "DEV_Config.h"
-#include "PAJ7620U2.h"
+#include "../User/DEV_Config/DEV_Config.h"
+#include "../User/PAJ7620U2/PAJ7620U2.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,10 +51,11 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-char statusAndLast10Gestures[11][4] = {0}; // 0 is master_ready, 1-11 is gestures newest->oldest
+char statusAndLast10Gestures[11][4] = {0}; // 0 is master_ready, 1-10 is gestures newest->oldest
 char gesture_name[4] = "NON\0";
+uint8_t gesture_type = 0;
 uint16_t gesture_data = 0;
-volatile uint8_t master_ready = 0;
+volatile uint8_t master_ready = 1;
 volatile uint8_t uart_flag = 0;
 /* USER CODE END PV */
 
@@ -63,8 +64,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_SPI2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
 /*
  *@brief PAJ7620U2 Initialization
@@ -73,16 +74,16 @@ unsigned char PAJ7620U2_init()
 {
 	unsigned char i, State, State1;
 	DEV_Set_I2CAddress(PAJ7620U2_I2C_ADDRESS);
-	DEV_I2C_WriteByte(PAJ_BANK_SELECT, 0);		//Select Bank 0
+	DEV_I2C_WriteByte(PAJ_BANK_SELECT, 0);		// Select Bank 0
 	DEV_Delay_ms(20);
 	State = DEV_I2C_ReadByte(0x00);	// Read State
 	State1 = DEV_I2C_ReadByte(0x01);
 	if (State != 0x20 || State1 != 0x76)
-		return 0;					//Wake up failed
+		return 0;					// Wake up failed
 
 	for (i=0;i< Init_Array;i++)
 	{
-		 DEV_I2C_WriteByte(Init_Register_Array[i][0], Init_Register_Array[i][1]);//Power up initialize
+		 DEV_I2C_WriteByte(Init_Register_Array[i][0], Init_Register_Array[i][1]); //Power up initialize
 	}
 	DEV_I2C_WriteByte(0x65, 0x12);
 	for (i=0; i<Gesture_Array_SIZE; ++i)
@@ -91,6 +92,54 @@ unsigned char PAJ7620U2_init()
 	}
 	return 1;
 }
+/*
+void uart_read_line(UART_HandleTypeDef* handler, char* buffer, uint16_t buffer_size) {
+	HAL_StatusTypeDef status;
+	char current_char;
+	uint16_t char_counter = 0;
+	while(char_counter < buffer_size-1) {
+		status = HAL_UART_Receive(handler, &current_char, 1, 100);
+		if(status == HAL_OK) {
+			if(current_char == '\r' || current_char == '\n')
+				if(char_counter == 0) continue;
+				else break;
+			*(buffer + char_counter++) = current_char;
+		}
+	}
+	*(buffer + char_counter) = '\0';
+}
+
+void uart_write_line(UART_HandleTypeDef* handler, char* text) {
+	HAL_UART_Transmit(handler, text, strlen(text), 1000);
+	HAL_UART_Transmit(handler, "\r\n", 2, 100);
+
+}
+
+uint8_t esp_send_cmd(UART_HandleTypeDef* uart, char* command) {
+
+	char response[30];
+	response[0] = '\0';
+	uart_write_line(uart, command);
+	__HAL_UART_FLUSH_DRREGISTER(&huart1);
+
+	while (strcmp(response, "OK") != 0
+		&& strcmp(response, "no change") != 0
+		&& strcmp(response, "ERROR") != 0)
+		uart_read_line(uart, response, 30);
+	if (strcmp(response, "ERROR") == 0) return 0;
+	else return 1;
+
+}
+
+unsigned char ESP8266_init()
+{
+	HAL_Delay(500); // let's wait till module gets up
+	if(!esp_send_cmd(&huart1, "AT")) return 0; // ping
+	if (!esp_send_cmd(&huart1, "AT+CWMODE=1")) return 0; // configure as WiFi endpoint-device
+	if (!esp_send_cmd(&huart1, "AT+CWJAP=\"pennyisafreeloader\",\"BigBangThe0ry\"")) return 0; // connect to guest WiFi at home
+	if (!esp_send_cmd(&huart1, "AT+CIPSTART=\"TCP\",\"migu.ovh\",\"5000\"")) return 0; // connect to server hosting python echo script
+	return 1;
+}*/
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,9 +177,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  MX_SPI2_Init();
   MX_USART2_UART_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
+  //if(ESP8266_init()) HAL_UART_Transmit(&huart2, "CANT_START_ESP\0", 15, 100);
   HAL_UART_Receive_IT(&huart2, (uint8_t*)&uart_flag, 1); // wait for input from testing PC
   HAL_SPI_Receive_IT(&hspi2, (uint8_t*)&master_ready, 1); // wait for ACK from NodeMCU
   if(!PAJ7620U2_init()) HAL_UART_Transmit_DMA(&huart2, (uint8_t*)statusAndLast10Gestures, sizeof(statusAndLast10Gestures));
@@ -141,29 +191,8 @@ int main(void)
   while (1)
   {
 	  // for testing purposes no IT yet
-	  gesture_data = DEV_I2C_ReadWord(PAJ_INT_FLAG1);
-	  if (gesture_data)
-	  {
-	    switch (gesture_data)
-	    {
-	      case PAJ_UP:			  	          strcpy(gesture_name, "U\0");	break;
-	  		case PAJ_DOWN:				          strcpy(gesture_name, "D\0");	break;
-	  		case PAJ_LEFT:				          strcpy(gesture_name, "L\0");	break;
-	  		case PAJ_RIGHT:				          strcpy(gesture_name, "R\0"); 	break;
-	  		case PAJ_FORWARD:			          strcpy(gesture_name, "FW\0");	break;
-	  		case PAJ_BACKWARD:			        strcpy(gesture_name, "BW\0"); 	break;
-	  		case PAJ_CLOCKWISE:			        strcpy(gesture_name, "CW\0"); 	break;
-	  		case PAJ_COUNT_CLOCKWISE:	      strcpy(gesture_name, "CCW\0"); 	break;
-	  		default:
-	  			gesture_data=DEV_I2C_ReadByte(PAJ_INT_FLAG2);
-	  			if(gesture_data == PAJ_WAVE)  strcpy(gesture_name, "WAV\0");
-	  			break;
-	  	}
-	  	memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], (sizeof(statusAndLast10Gestures)-2*4*sizeof(char))); // last element gets overwritten
-	  	strcpy(statusAndLast10Gestures[1], gesture_name); // save new gesture
-	  	HAL_Delay(50);
-	  	HAL_UART_Transmit(&huart2, (uint8_t*)&gesture_name, sizeof(gesture_name), 0xFFFF);
-	  }
+	  I2CReadGesture();
+	  //HAL_SPI_TransmitReceive(&hspi2, 42, &master_ready, 1, 10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -344,29 +373,29 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
+  /*Configure GPIO pin : PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA11 */
   GPIO_InitStruct.Pin = GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
@@ -382,12 +411,26 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	HAL_UART_Receive_IT(&huart2, (uint8_t*)&uart_flag, 1); // wait for input from testing PC
 }
 
+/*
+ *@brief SPI Receive Callback -- Used for triggering gesture read and transfer to NodeMCU
+ */
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+	master_ready = 0;
+	I2CReadGesture();
+	HAL_SPI_Transmit(&hspi2, &gesture_type, 1, 10);
+	HAL_SPI_Receive_IT(&hspi2, &master_ready, 1); // re-enable wait for ACK from NodeMCU
+}
+
 // I2CReadGesture - called by GPIO_PIN_11 EXTI ISR - incoming INT from gesture sensor
 void I2CReadGesture()
 {
+	statusAndLast10Gestures[0][0] = master_ready;
 	gesture_data = DEV_I2C_ReadWord(PAJ_INT_FLAG1);
 	if (gesture_data)
 	{
+		gesture_type = gesture_data;
 		switch (gesture_data)
 		{
 			case PAJ_UP:			  	strcpy(gesture_name, "U\0");	break;
@@ -403,11 +446,11 @@ void I2CReadGesture()
 				 if(gesture_data == PAJ_WAVE) strcpy(gesture_name, "WAV\0");
 				 break;
 		}
-		memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], (sizeof(statusAndLast10Gestures)-2*5*sizeof(char))); // last element gets overwritten
+		memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], 4*8*sizeof(char)); // last element gets overwritten
+		//memmove(&statusAndLast10Gestures[2], &statusAndLast10Gestures[1], (sizeof(statusAndLast10Gestures)-2*4*sizeof(char))); // last element gets overwritten
 		strcpy(statusAndLast10Gestures[1], gesture_name); // save new gesture
 		HAL_Delay(50);
 		HAL_UART_Transmit(&huart2, (uint8_t*)&gesture_name, sizeof(gesture_name), 0xFFFF);
-		if(!master_ready) return;
 	}
 }
 /* USER CODE END 4 */
